@@ -150,18 +150,26 @@ def main():
                         new_users = len(display_df[pd.to_datetime(display_df['Primo Accesso']) > datetime.datetime.now() - datetime.timedelta(days=30)])
                         st.metric("Nuovi Utenti (30 giorni)", new_users)
 
+                df_with_counts = merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts)
+                df_joined = display_df.merge(df_with_counts, left_on='Email', right_on='email', how='outer')
                 st.dataframe(
-                    display_df,
+                    df_joined.drop('email', axis = 1),
                     use_container_width=True,
                     hide_index=True
                 )
 
-                df_with_counts = merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts)
-                st.dataframe(
-                    df_with_counts,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                with st.expander("Vecchia visualizzazione"):
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    st.dataframe(
+                        df_with_counts,
+                        use_container_width=True,
+                        hide_index=True
+                    )
 
             else:
                 st.info("Nessun dato disponibile.")
