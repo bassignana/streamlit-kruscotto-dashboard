@@ -92,31 +92,46 @@ def format_overview_dataframe(df):
     return display_df
 
 def fetch_count_data_by_user(supabase_client):
-    response = supabase_client.table("fatture_emesse").select("user_id").execute()
-    user_ids = [row["user_id"] for row in response.data if row.get("user_id")]
+    response = supabase_client.table("fatture_emesse").select("business_id").execute()
+    # st.write(response)
+    # st.write(response.data[0])
+    # st.write(response.data[0]['business_id'])
+    user_ids = [row["business_id"] for row in response.data if row.get("business_id")]
     emesse_counts = Counter(user_ids)
 
-    response = supabase_client.table("fatture_ricevute").select("user_id").execute()
-    user_ids = [row["user_id"] for row in response.data if row.get("user_id")]
+    response = supabase_client.table("fatture_ricevute").select("business_id").execute()
+    user_ids = [row["business_id"] for row in response.data if row.get("business_id")]
     ricevute_counts = Counter(user_ids)
 
-    response = supabase_client.table("movimenti_attivi").select("user_id").execute()
-    user_ids = [row["user_id"] for row in response.data if row.get("user_id")]
+    response = supabase_client.table("movimenti_attivi").select("business_id").execute()
+    user_ids = [row["business_id"] for row in response.data if row.get("business_id")]
     attivi_counts = Counter(user_ids)
 
-    response = supabase_client.table("movimenti_passivi").select("user_id").execute()
-    user_ids = [row["user_id"] for row in response.data if row.get("user_id")]
+    response = supabase_client.table("movimenti_passivi").select("business_id").execute()
+    user_ids = [row["business_id"] for row in response.data if row.get("business_id")]
     passivi_counts = Counter(user_ids)
 
     return emesse_counts, ricevute_counts, attivi_counts, passivi_counts
 
-def merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts):
-    df = df[["user_id", "email"]].copy()
+def merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts, supabase_client):
+    st.write(df)
 
-    df["totale_fatture_emesse"]   = df["user_id"].map(emesse_counts).fillna(0).astype(int)
-    df["totale_fatture_ricevute"] = df["user_id"].map(ricevute_counts).fillna(0).astype(int)
-    df["totale_movimenti_attivi"]   = df["user_id"].map(attivi_counts).fillna(0).astype(int)
-    df["totale_movimenti_passivi"]  = df["user_id"].map(passivi_counts).fillna(0).astype(int)
+    # Get the businesses table to map user_id -> business_id
+    businesses_response = supabase_client.table("businesses").select("id, owner_id").execute()
+    businesses_df = pd.DataFrame(businesses_response.data)
+
+    # Rename columns for clarity
+    businesses_df = businesses_df.rename(columns={"id": "business_id", "owner_id": "user_id"})
+
+    # Merge df with businesses to get business_id
+    df = df.merge(businesses_df, on="user_id", how="left")
+
+    # df = df[["user_id", "email"]].copy()
+
+    df["totale_fatture_emesse"]   = df["business_id"].map(emesse_counts).fillna(0).astype(int)
+    df["totale_fatture_ricevute"] = df["business_id"].map(ricevute_counts).fillna(0).astype(int)
+    df["totale_movimenti_attivi"]   = df["business_id"].map(attivi_counts).fillna(0).astype(int)
+    df["totale_movimenti_passivi"]  = df["business_id"].map(passivi_counts).fillna(0).astype(int)
 
     df = df[["email", "totale_fatture_emesse", "totale_fatture_ricevute", "totale_movimenti_attivi", "totale_movimenti_passivi"]]
 
@@ -150,7 +165,7 @@ def main():
                         new_users = len(display_df[pd.to_datetime(display_df['Primo Accesso']) > datetime.datetime.now() - datetime.timedelta(days=30)])
                         st.metric("Nuovi Utenti (30 giorni)", new_users)
 
-                df_with_counts = merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts)
+                df_with_counts = merge_user_counts(df, emesse_counts, ricevute_counts, attivi_counts, passivi_counts, supabase)
                 df_joined = display_df.merge(df_with_counts, left_on='Email', right_on='email', how='outer')
                 st.dataframe(
                     df_joined.drop('email', axis = 1),
